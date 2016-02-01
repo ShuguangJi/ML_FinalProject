@@ -1,0 +1,134 @@
+---
+title: "ML Final Project"
+author: "Shuguang Ji"
+date: "January 31, 2016"
+output: html_document
+---
+#Objective
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+##Step1 Install Packages
+
+```{r,warning=FALSE,results='hide',message=FALSE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+if (!require('rattle')) 
+{
+  install.packages('rattle');
+  library(rattle);
+}
+if (!require('e1071')) 
+{
+  install.packages('e1071');
+  library(e1071);
+}
+
+set.seed(1234)
+```
+
+##Step2 Load Data and Create Training and Testing Sets
+In this analysis, 70% data are used for training and 30% are used for testing.
+
+```{r}
+UrlTrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+UrlTest  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(UrlTrain))
+testing  <- read.csv(url(UrlTest))
+
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+myTraining <- training[inTrain, ] 
+myTesting <- training[-inTrain, ]
+```
+
+##Step3 Clean Data
+The following codes are used to clean the data sets. Major cleaning process include: remove missing values, assign columns' names, dimension reduction, data transformation, and data coerce.
+```{r}
+myDataNZV <- nearZeroVar(myTraining, saveMetrics=TRUE)
+myNZVvars <- names(myTraining) %in% c("new_window", "kurtosis_roll_belt", "kurtosis_picth_belt",
+                                    "kurtosis_yaw_belt", "skewness_roll_belt", "skewness_roll_belt.1", "skewness_yaw_belt",
+                                    "max_yaw_belt", "min_yaw_belt", "amplitude_yaw_belt", "avg_roll_arm", "stddev_roll_arm",
+                                    "var_roll_arm", "avg_pitch_arm", "stddev_pitch_arm", "var_pitch_arm", "avg_yaw_arm",
+                                    "stddev_yaw_arm", "var_yaw_arm", "kurtosis_roll_arm", "kurtosis_picth_arm",
+                                    "kurtosis_yaw_arm", "skewness_roll_arm", "skewness_pitch_arm", "skewness_yaw_arm",
+                                    "max_roll_arm", "min_roll_arm", "min_pitch_arm", "amplitude_roll_arm", "amplitude_pitch_arm",
+                                    "kurtosis_roll_dumbbell", "kurtosis_picth_dumbbell", "kurtosis_yaw_dumbbell", "skewness_roll_dumbbell",
+                                    "skewness_pitch_dumbbell", "skewness_yaw_dumbbell", "max_yaw_dumbbell", "min_yaw_dumbbell",
+                                    "amplitude_yaw_dumbbell", "kurtosis_roll_forearm", "kurtosis_picth_forearm", "kurtosis_yaw_forearm",
+                                    "skewness_roll_forearm", "skewness_pitch_forearm", "skewness_yaw_forearm", "max_roll_forearm",
+                                    "max_yaw_forearm", "min_roll_forearm", "min_yaw_forearm", "amplitude_roll_forearm",
+                                    "amplitude_yaw_forearm", "avg_roll_forearm", "stddev_roll_forearm", "var_roll_forearm",
+                                    "avg_pitch_forearm", "stddev_pitch_forearm", "var_pitch_forearm", "avg_yaw_forearm",
+                                    "stddev_yaw_forearm", "var_yaw_forearm")
+myTraining <- myTraining[!myNZVvars]
+myTraining <- myTraining[c(-1)]
+temp <- myTraining 
+for(i in 1:length(myTraining)) { 
+  if( sum( is.na( myTraining[, i] ) ) /nrow(myTraining) >= .6 ) {
+    for(j in 1:length(temp)) {
+      if( length( grep(names(myTraining[i]), names(temp)[j]) ) ==1)  {
+        temp <- temp[ , -j] 
+      }   
+    } 
+  }
+}
+
+myTraining <- temp
+rm(temp)
+
+clean1 <- colnames(myTraining)
+clean2 <- colnames(myTraining[, -58]) 
+myTesting <- myTesting[clean1]
+testing <- testing[clean2]
+
+for (i in 1:length(testing) ) {
+  for(j in 1:length(myTraining)) {
+    if( length( grep(names(myTraining[i]), names(testing)[j]) ) ==1)  {
+      class(testing[j]) <- class(myTraining[i])
+    }      
+  }      
+}
+
+testing <- rbind(myTraining[2, -58] , testing) 
+testing <- testing[-1,]
+```
+
+##Step4 Marchine Learning
+In this step, the cleaned data sets will be used to train the models and do predict.   
+
+###Decision Tree Model
+Following plot is the results from running decision tree model on traning data set.
+```{r}
+mod.dt <- rpart(classe ~ ., data=myTraining, method="class")
+fancyRpartPlot(mod.dt)
+```
+
+The accuracy of decision tree model is shown below.
+```{r}
+predictions.dt <- predict(mod.dt, myTesting, type = "class")
+confusionMatrix(predictions.dt, myTesting$classe)
+```
+
+###Random Forest Model
+Following plot is the results from running random forest model on traning data set.
+```{r}
+mod.rf <- randomForest(classe ~. , data=myTraining)
+```
+
+```{r}
+predictions.rf <- predict(mod.rf, myTesting, type = "class")
+confusionMatrix(predictions.rf, myTesting$classe)
+```
+
+By comparing the performance of decision tree model and random forest model, we notice that random forest model outperformed. Thus, random forest model is selected to do predcit fro 20 test cases.
+
+###20 Test Cases
+The results of applying randome forest algorithm to the 20 test cases are show below.
+```{r}
+predictions.20 <- predict(mod.rf, testing, type = "class")
+predictions.20
+```
+
